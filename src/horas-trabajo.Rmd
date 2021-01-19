@@ -1,0 +1,139 @@
+---
+title: "Horas de trabajo"
+output:
+  flexdashboard::flex_dashboard:
+    vertical_layout: scroll
+    orientation: rows
+---
+
+```{r}
+# Carga de librerías
+library(ggplot2) #graficos
+library(dplyr) #manipulación de data 
+library(zoo) #series de tiempo
+library(readr)
+library(tidyr)
+library(RcppRoll)
+library(lubridate) #manejo de fechas
+library(flexdashboard)
+
+options("lubridate.week.start" = 1)
+
+horas_trabajo <-read.csv2("/home/rstudio/data/horas_trabajo.csv", sep = ";")
+horas_trabajo$Inicio <- as.POSIXct(horas_trabajo$Inicio, format = "%d/%m/%Y %H:%M:%S")
+horas_trabajo$Fin <- as.POSIXct(horas_trabajo$Fin, format = "%d/%m/%Y %H:%M:%S")
+
+```
+
+Cabecera
+--------
+
+### Horas de trabajo en la semana
+````{r}
+total_H_semana <- horas_trabajo %>%
+  mutate(isoweek = isoweek(Inicio)) %>%
+  filter(isoweek == last(isoweek)) %>%
+  select(Fin, Inicio) %>%
+  summarize(Tiempo = sum(difftime(Fin, Inicio, units = "hours"))) %>%
+  pull()
+gauge(round(total_H_semana, 2), min = 0, max = 35, symbol = "h", gaugeSectors(
+  success = c(30, 35), warning = c(21, 30), danger = c(0, 20)))
+`````
+
+### Horas de trabajo en el día
+````{r}
+total_H_dia <- horas_trabajo %>%
+  mutate(d = date(Inicio)) %>%
+  filter(d == today()) %>%
+  select(Fin, Inicio) %>%
+  summarize(Tiempo = sum(difftime(Fin, Inicio, units = "hours"))) %>%
+  pull()
+gauge(round(total_H_dia, 2), min = 0, max = 7, symbol = "h", gaugeSectors(
+  success = c(6, 7), warning = c(3, 6), danger = c(0, 3)))
+`````
+
+Todos los días
+--------------
+
+### Horas diarias
+```{r fig.width=10, fig.height=3}
+horas_trabajo %>%
+  mutate(fecha = date(Inicio)) %>%
+  group_by(fecha) %>%
+  summarize(Tiempo = sum(difftime(Fin, Inicio, units = "hours"))) %>%
+  ggplot(aes( x = fecha, y = Tiempo)) +
+  geom_col() +
+  geom_hline(yintercept=6.6, linetype="dashed", color = "red") +
+  theme(legend.position="none") +
+  labs (x = element_blank(), y = element_blank(), title = element_blank())
+```
+
+Horas por trabajo
+-----------------
+
+### Horas en el último mes
+
+````{r}
+horas_trabajo %>% 
+  mutate(month = month(Inicio)) %>%
+  filter(month == last(month)) %>%
+  group_by(Trabajo) %>%
+  summarize(Tiempo = sum(difftime(Fin, Inicio, units = "hours"))) %>%
+  ggplot(aes( x = Tiempo, y = Trabajo, fill = Trabajo)) +
+  geom_col() +
+  geom_label(aes(label = round(Tiempo,2)), fill = "white") +
+  theme(legend.position="none") +
+  labs (x = element_blank(), y = element_blank(), title = element_blank())
+````
+
+### En la última semana
+
+````{r}
+horas_trabajo %>% 
+  mutate(isoweek = isoweek(Inicio)) %>%
+  filter(isoweek == last(isoweek)) %>%
+  group_by(Trabajo) %>%
+  summarize(Tiempo = sum(difftime(Fin, Inicio, units = "hours"))) %>%
+  ggplot(aes( x = Tiempo, y = Trabajo, fill = Trabajo)) +
+  geom_col() +
+  geom_label(aes(label = round(Tiempo,2)), fill = "white") +
+  theme(legend.position="none") +
+  labs (x = element_blank(), y = element_blank(), title = element_blank())
+````
+
+Horas por día
+-------------
+
+### Promedio de trabajo por día:
+
+````{r}
+horas_trabajo %>%
+  tibble(dia = wday(Inicio, label = TRUE, abbr = FALSE),
+         isoweek = isoweek(Inicio)) %>%
+  group_by(dia, isoweek) %>%
+  summarize(Tiempo = sum(difftime(Fin, Inicio, units = "hours"))) %>%
+  group_by(dia) %>%
+  summarize(Tiempo = mean(Tiempo)) %>%
+  ggplot(aes( x = dia, y = Tiempo, fill = dia)) +
+  geom_col() +
+  geom_label(aes(label = round(Tiempo,2)), fill = "white") +
+  theme(legend.position="none") +
+  labs (x = element_blank(), y = element_blank(), title = element_blank())
+```
+
+### Trabajo por día en la última semana:
+
+
+````{r}
+horas_trabajo %>%
+  tibble(dia = wday(Inicio, label = TRUE, abbr = FALSE),
+         isoweek = isoweek(Inicio)) %>% #identifica el número de semana
+  filter(isoweek == last(isoweek)) %>% #filtra última semana
+  group_by(dia) %>%
+  summarize(Tiempo = sum(difftime(Fin, Inicio, units = "hours"))) %>%
+  ggplot(aes( x = dia, y = Tiempo, fill = dia)) +
+  geom_col() +
+  geom_label(aes(label = round(Tiempo,2)), fill = "white") +
+  theme(legend.position="none") +
+  labs (x = element_blank(), y = element_blank(), title = element_blank())
+```
