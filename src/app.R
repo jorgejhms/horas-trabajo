@@ -12,6 +12,7 @@ library(flexdashboard)
     db <- read.csv2("../example/horas_trabajo.csv", sep = ";") 
     db$Inicio <- as.POSIXct(db$Inicio, format = "%d/%m/%Y %H:%M:%S")
     db$Fin <- as.POSIXct(db$Fin, format = "%d/%m/%Y %H:%M:%S")
+    
 
 # Interfaz de usuario
 ui <- fluidPage(
@@ -26,6 +27,12 @@ ui <- fluidPage(
                           inputId = "IniSem",
                           label = "La semana empieza en:",
                           choices = c("Domingo", "Lunes")
+                          ),
+                      
+                      selectInput(
+                          inputId = "filtro",
+                          label = "Elije filtro:",
+                          choices = c("Mes", "Semana")
                           )
         ),
 
@@ -39,8 +46,10 @@ ui <- fluidPage(
             
             h2("Horas diarias"),
             plotOutput("hdiarias"),
+            
             h2("Horas en el último mes"),
-            h2("Horas en la última semana"),
+            plotOutput("hultim"),
+            
             h2("Promedio de trabajo por día"),
             h2("Promedio de trabajo por día durante la última semana")
             )
@@ -57,9 +66,7 @@ server <- function(input, output) {
             Lunes = 1)
         options("lubridate.week.start" = SemIni)
         
-    }
-        
-    ) 
+    }) 
 
     
     # Total de horas en la semana
@@ -122,7 +129,28 @@ server <- function(input, output) {
             labs (x = element_blank(), y = element_blank(), title = element_blank())
     })
     
-    
+    output$hultim <- renderPlot({
+       
+            
+            x <- reactive({
+                switch(input$filtro,
+                        Mes = month,
+                        Semana = isoweek)
+                })
+            
+            db %>%
+                mutate(x = x(Inicio))%>%
+                filter(x == last(x)) %>%
+                group_by(Trabajo) %>%
+                summarize(Tiempo = sum(difftime(Fin, Inicio, units = "hours"))) %>%
+                ggplot(aes(x = Tiempo, y = Trabajo, fill = Trabajo)) +
+                geom_col() +
+                geom_label(aes(label = round(Tiempo, 2)), fill = "white") +
+                theme(legend.position = "none") +
+                labs (x = element_blank(), y = element_blank(), title = element_blank())
+        
+        
+    })
 }
 
 
